@@ -1,0 +1,120 @@
+-- Nico Project | Grow A Garden
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "Nico Project",
+    SubTitle = "Grow A Garden",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(560, 440),
+    Acrylic = false,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.RightControl
+})
+
+local Tabs = {
+    Graphics = Window:AddTab({ Title = "Improve Graphics", Icon = "cpu" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+local Players = game:GetService("Players")
+
+local PATTERNS = {
+    "tree","bush","rock","grass","plant","flower","stone","prop","decor","decoration",
+    "foliage","shrub","log","leaf","mushroom","berry","bamboo","vine"
+}
+
+local HiddenState = {}
+
+local function match(str)
+    local s = string.lower(str or "")
+    for _,p in ipairs(PATTERNS) do
+        if string.find(s, p, 1, true) then return true end
+    end
+end
+
+local function skipCharacter(inst)
+    local a = inst
+    while a and a ~= workspace do
+        if a:IsA("Model") and a:FindFirstChildOfClass("Humanoid") then
+            if Players:GetPlayerFromCharacter(a) then return true end
+        end
+        a = a.Parent
+    end
+end
+
+local function isRenderable(inst)
+    return inst:IsA("BasePart") or inst:IsA("MeshPart") or inst:IsA("UnionOperation")
+        or inst:IsA("Decal") or inst:IsA("Texture") or inst:IsA("ParticleEmitter")
+        or inst:IsA("Beam") or inst:IsA("Trail")
+end
+
+local function hideAll()
+    for _,inst in ipairs(workspace:GetDescendants()) do
+        if match(inst.Name) and not skipCharacter(inst) then
+            for _,d in ipairs(inst:GetDescendants()) do
+                if isRenderable(d) and HiddenState[d] == nil then
+                    HiddenState[d] = {
+                        Transparency = d:IsA("BasePart") and d.Transparency or nil,
+                        CanCollide   = d:IsA("BasePart") and d.CanCollide or nil,
+                        Enabled      = (d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail")) and d.Enabled or nil,
+                    }
+                    if d:IsA("BasePart") or d:IsA("MeshPart") or d:IsA("UnionOperation") then
+                        d.Transparency, d.CanCollide = 1, false
+                    elseif d:IsA("Decal") or d:IsA("Texture") then
+                        d.Transparency = 1
+                    elseif d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail") then
+                        d.Enabled = false
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function restoreAll()
+    for inst,st in pairs(HiddenState) do
+        if inst and inst.Parent then
+            if inst:IsA("BasePart") or inst:IsA("MeshPart") or inst:IsA("UnionOperation") then
+                if st.Transparency ~= nil then inst.Transparency = st.Transparency end
+                if st.CanCollide ~= nil then inst.CanCollide = st.CanCollide end
+            elseif inst:IsA("Decal") or inst:IsA("Texture") then
+                if st.Transparency ~= nil then inst.Transparency = st.Transparency end
+            elseif inst:IsA("ParticleEmitter") or inst:IsA("Beam") or inst:IsA("Trail") then
+                if st.Enabled ~= nil then inst.Enabled = st.Enabled end
+            end
+        end
+        HiddenState[inst] = nil
+    end
+end
+
+local function hardDeleteAll()
+    for _,inst in ipairs(workspace:GetDescendants()) do
+        if match(inst.Name) and not skipCharacter(inst) then
+            pcall(function() inst:Destroy() end)
+        end
+    end
+    HiddenState = {}
+end
+
+Tabs.Graphics:AddToggle("HideDecor", {
+    Title = "Hide Decorations",
+    Default = false,
+    Callback = function(state)
+        if state then hideAll() else restoreAll() end
+    end
+})
+
+Tabs.Graphics:AddButton({
+    Title = "Hard Delete Decorations",
+    Callback = function() hardDeleteAll() end
+})
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:BuildConfigSection(Tabs.Settings)
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:SetIgnoreIndexes({})
+SaveManager:LoadAutoloadConfig()
